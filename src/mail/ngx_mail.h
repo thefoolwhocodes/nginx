@@ -4,6 +4,10 @@
  * Copyright (C) Nginx, Inc.
  */
 
+/*
+ * Portions Copyright (c) Zimbra Software, LLC. [1998-2011]. All Rights Reserved.
+ */
+
 
 #ifndef _NGX_MAIL_H_INCLUDED_
 #define _NGX_MAIL_H_INCLUDED_
@@ -18,7 +22,7 @@
 #include <ngx_mail_ssl_module.h>
 #endif
 
-
+#include <sasl/sasl.h>
 
 typedef struct {
     void                  **main_conf;
@@ -134,7 +138,17 @@ typedef struct {
     ngx_flag_t              so_keepalive;
 
     ngx_str_t               server_name;
+   
+    ngx_str_t               master_auth_username;
+    ngx_str_t               master_auth_password;
 
+    ngx_str_t               sasl_app_name;
+    ngx_str_t               sasl_service_name;
+    ngx_flag_t              sasl_host_from_ip;
+
+    ngx_msec_t              auth_wait_intvl;
+
+    ngx_str_t               default_realm;
     u_char                 *file_name;
     ngx_int_t               line;
 
@@ -147,12 +161,15 @@ typedef struct {
 
 typedef enum {
     ngx_pop3_start = 0,
+    ngx_pop3_xoip,
     ngx_pop3_user,
     ngx_pop3_passwd,
     ngx_pop3_auth_login_username,
     ngx_pop3_auth_login_password,
     ngx_pop3_auth_plain,
-    ngx_pop3_auth_cram_md5
+    ngx_pop3_auth_plain_response,
+    ngx_pop3_auth_cram_md5,
+    ngx_pop3_auth_gssapi
 } ngx_pop3_state_e;
 
 
@@ -161,7 +178,10 @@ typedef enum {
     ngx_imap_auth_login_username,
     ngx_imap_auth_login_password,
     ngx_imap_auth_plain,
+    ngx_imap_auth_plain_ir,
+    ngx_imap_auth_gssapi,
     ngx_imap_auth_cram_md5,
+    ngx_imap_id,
     ngx_imap_login,
     ngx_imap_user,
     ngx_imap_passwd
@@ -173,8 +193,10 @@ typedef enum {
     ngx_smtp_auth_login_username,
     ngx_smtp_auth_login_password,
     ngx_smtp_auth_plain,
+    ngx_smtp_auth_gssapi,
     ngx_smtp_auth_cram_md5,
     ngx_smtp_helo,
+    ngx_smtp_noxclient,
     ngx_smtp_helo_xclient,
     ngx_smtp_helo_from,
     ngx_smtp_xclient,
@@ -184,12 +206,27 @@ typedef enum {
     ngx_smtp_to
 } ngx_smtp_state_e;
 
+/* sasl auth mechanisms */
+typedef enum {
+    ngx_auth_unknown = 0,
+    ngx_auth_plain,
+    ngx_auth_gssapi,
+} ngx_auth_e;
 
 typedef struct {
     ngx_peer_connection_t   upstream;
     ngx_buf_t              *buffer;
 } ngx_mail_proxy_ctx_t;
 
+typedef void (*ngx_mail_cleanup_pt)(void *data);
+
+typedef struct ngx_mail_cleanup_s  ngx_mail_cleanup_t;
+
+struct ngx_mail_cleanup_s {
+    ngx_mail_cleanup_pt               handler;
+    void                             *data;
+    ngx_mail_cleanup_t               *next;
+};
 
 typedef struct {
     uint32_t                signature;         /* "MAIL" */
@@ -209,6 +246,8 @@ typedef struct {
 
     ngx_uint_t              mail_state;
 
+    ngx_str_t               greetings[3];
+
     unsigned                protocol:3;
     unsigned                blocked:1;
     unsigned                quit:1;
@@ -217,11 +256,24 @@ typedef struct {
     unsigned                no_sync_literal:1;
     unsigned                starttls:1;
     unsigned                esmtp:1;
-    unsigned                auth_method:3;
+    unsigned                auth_method:4;
     unsigned                auth_wait:1;
+    unsigned                sendquitmsg:1;
+    unsigned                vlogin:2; /* vlogin = 0 fqdn is not looked up;
+                                         vlogin = 1 fqdn has been looked up but not found;
+                                         vlogin = 2 fqdn has been looked up and assigned to "login"
+                                       */
 
-    ngx_str_t               login;
+    ngx_str_t               login;  /* keep the original user input login */
+
+    ngx_str_t               qlogin; /* initially equal to 'login', then hold account name
+                                       after successful alias cache fetch or route lookup
+                                       this value is finally used to login the upstream
+                                       mail server*/
+    ngx_str_t               zlogin; /* the hack suffix "/wm" or "/ni" or "/tb" */
     ngx_str_t               passwd;
+    ngx_str_t               id_name;    /* the value of "name" field in IMAP ID */
+    ngx_str_t               id_version; /* the value of "version" field in IMAP ID */
 
     ngx_str_t               salt;
     ngx_str_t               tag;
@@ -246,11 +298,32 @@ typedef struct {
     u_char                 *arg_start;
     u_char                 *arg_end;
     ngx_uint_t              literal_len;
+    ngx_uint_t              eargs;          /* expected #args for command */
+
+    /* SASL */
+    ngx_flag_t              usedauth;
+    ngx_flag_t              qualifydauth;
+    ngx_str_t               dusr;
+    ngx_str_t               zusr;
+    ngx_str_t               dpasswd;
+    ngx_auth_e              authmech;
+    ngx_flag_t              saslfr;
+    sasl_conn_t            *saslconn;
+    ngx_str_t               authid;         /* SASL authenticating user */
+
+    /* memcache keys */
+    ngx_str_t               key_alias;
+    ngx_str_t               key_route;
+
+    /* clean up */
+    ngx_mail_cleanup_t    *cleanup;
+
 } ngx_mail_session_t;
 
 
 typedef struct {
     ngx_str_t              *client;
+    ngx_uint_t             client_port;
     ngx_mail_session_t     *session;
 } ngx_mail_log_ctx_t;
 
@@ -277,10 +350,9 @@ typedef struct {
 #define NGX_IMAP_CAPABILITY    3
 #define NGX_IMAP_NOOP          4
 #define NGX_IMAP_STARTTLS      5
-
-#define NGX_IMAP_NEXT          6
-
+#define NGX_IMAP_ID            6
 #define NGX_IMAP_AUTHENTICATE  7
+#define NGX_IMAP_NEXT          8
 
 
 #define NGX_SMTP_HELO          1
@@ -304,17 +376,28 @@ typedef struct {
 #define NGX_MAIL_AUTH_APOP              3
 #define NGX_MAIL_AUTH_CRAM_MD5          4
 #define NGX_MAIL_AUTH_NONE              5
-
+/* zimbra extension definition */
+#define NGX_MAIL_AUTH_PASSWD            6
+#define NGX_MAIL_AUTH_PLAIN_IR          7
+#define NGX_MAIL_AUTH_GSSAPI            8
+#define NGX_MAIL_AUTH_GSSAPI_IR         9
 
 #define NGX_MAIL_AUTH_PLAIN_ENABLED     0x0002
 #define NGX_MAIL_AUTH_LOGIN_ENABLED     0x0004
 #define NGX_MAIL_AUTH_APOP_ENABLED      0x0008
 #define NGX_MAIL_AUTH_CRAM_MD5_ENABLED  0x0010
-#define NGX_MAIL_AUTH_NONE_ENABLED      0x0020
+#define NGX_MAIL_AUTH_GSSAPI_ENABLED    0x0020
+#define NGX_MAIL_AUTH_NONE_ENABLED      0x0040
 
+#define NGX_MAIL_PARSE_INVALID_COMMAND   20
+#define NGX_MAIL_PARSE_INVALID_AUTH_MECH 30
+#define NGX_MAIL_AUTH_ABORT              40
+#define NGX_MAIL_AUTH_ARGUMENT           50
+#define NGX_MAIL_AUTH_FAILED             60
+#define NGX_MAIL_LOGIN_FAILED            70
 
-#define NGX_MAIL_PARSE_INVALID_COMMAND  20
-
+#define NGX_MAIL_MAX_LOGIN_LEN           256
+#define NGX_MAIL_MAX_PASSWORD_LEN        1024
 
 typedef void (*ngx_mail_init_session_pt)(ngx_mail_session_t *s,
     ngx_connection_t *c);
@@ -334,6 +417,7 @@ struct ngx_mail_protocol_s {
     ngx_mail_auth_state_pt      auth_state;
 
     ngx_str_t                   internal_server_error;
+    ngx_str_t                   quit_msg;
 };
 
 
@@ -349,10 +433,10 @@ typedef struct {
 } ngx_mail_module_t;
 
 
-#define NGX_MAIL_MODULE         0x4C49414D     /* "MAIL" */
+#define NGX_MAIL_MODULE      0x4C49414D     /* "MAIL" */
 
-#define NGX_MAIL_MAIN_CONF      0x02000000
-#define NGX_MAIL_SRV_CONF       0x04000000
+#define NGX_MAIL_MAIN_CONF   0x02000000
+#define NGX_MAIL_SRV_CONF    0x04000000
 
 
 #define NGX_MAIL_MAIN_CONF_OFFSET  offsetof(ngx_mail_conf_ctx_t, main_conf)
@@ -393,13 +477,27 @@ ngx_int_t ngx_mail_auth_login_password(ngx_mail_session_t *s,
 ngx_int_t ngx_mail_auth_cram_md5_salt(ngx_mail_session_t *s,
     ngx_connection_t *c, char *prefix, size_t len);
 ngx_int_t ngx_mail_auth_cram_md5(ngx_mail_session_t *s, ngx_connection_t *c);
+ngx_int_t ngx_mail_auth_gssapi(ngx_mail_session_t *s, ngx_connection_t *c, ngx_str_t * output);
 ngx_int_t ngx_mail_auth_parse(ngx_mail_session_t *s, ngx_connection_t *c);
 
 void ngx_mail_send(ngx_event_t *wev);
 ngx_int_t ngx_mail_read_command(ngx_mail_session_t *s, ngx_connection_t *c);
+void ngx_mail_set_imap_parse_state_start(ngx_mail_session_t * s);
+void ngx_mail_set_pop3_parse_state_start(ngx_mail_session_t * s);
+void ngx_mail_set_smtp_parse_state_start(ngx_mail_session_t * s);
+void ngx_mail_set_imap_parse_state_argument(ngx_mail_session_t * s);
+void ngx_mail_set_pop3_parse_state_argument(ngx_mail_session_t * s);
+void ngx_mail_set_smtp_parse_state_argument(ngx_mail_session_t * s);
+void ngx_mail_reset_parse_buffer(ngx_mail_session_t * s);
 void ngx_mail_auth(ngx_mail_session_t *s, ngx_connection_t *c);
+void ngx_mail_do_auth(ngx_mail_session_t *s, ngx_connection_t *c); /* Zimbra mail auth portal */
 void ngx_mail_close_connection(ngx_connection_t *c);
 void ngx_mail_session_internal_server_error(ngx_mail_session_t *s);
+void ngx_mail_end_session(ngx_mail_session_t *s);
+ngx_str_t ngx_mail_session_getquitmsg(ngx_mail_session_t *s);
+ngx_str_t ngx_mail_session_geterrmsg(ngx_mail_session_t *s);
+ngx_str_t ngx_mail_get_socket_local_addr_str (ngx_pool_t *pool, ngx_socket_t s);
+ngx_int_t ngx_mail_decode_auth_plain(ngx_mail_session_t *s, ngx_str_t *encoded);
 u_char *ngx_mail_log_error(ngx_log_t *log, u_char *buf, size_t len);
 
 
@@ -410,7 +508,9 @@ char *ngx_mail_capabilities(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 void ngx_mail_proxy_init(ngx_mail_session_t *s, ngx_addr_t *peer);
 void ngx_mail_auth_http_init(ngx_mail_session_t *s);
 /**/
+ngx_mail_cleanup_t * ngx_mail_cleanup_add(ngx_mail_session_t * s, size_t size);
 
+ngx_flag_t ngx_mail_get_proxy_ssl(ngx_mail_session_t *s);
 
 extern ngx_uint_t    ngx_mail_max_module;
 extern ngx_module_t  ngx_mail_core_module;

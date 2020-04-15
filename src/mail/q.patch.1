@@ -1,0 +1,88 @@
+--- ngx_mail.h	2013-08-27 20:57:34.000000000 -0500
++++ ngx_mail.h	2013-08-27 20:57:34.000000000 -0500
+@@ -323,6 +323,7 @@
+ 
+ typedef struct {
+     ngx_str_t              *client;
++    ngx_uint_t             client_port;
+     ngx_mail_session_t     *session;
+ } ngx_mail_log_ctx_t;
+ 
+--- ngx_mail_handler.c	2013-10-25 23:44:02.000000000 -0500
++++ ngx_mail_handler.c	2013-10-25 23:44:02.000000000 -0500
+@@ -52,6 +52,7 @@
+ {
+     ngx_uint_t             i;
+     ngx_mail_port_t       *port;
++    ngx_uint_t            remote_port;
+     struct sockaddr       *sa;
+     struct sockaddr_in    *sin;
+     ngx_mail_log_ctx_t    *ctx;
+@@ -157,8 +158,21 @@
+     c->data = s;
+     s->connection = c;
+ 
+-    ngx_log_error(NGX_LOG_INFO, c->log, 0, "*%ui client %V connected to %V",
+-                  c->number, &c->addr_text, s->addr_text);
++    switch (c->sockaddr->sa_family) {
++#if (NGX_HAVE_INET6)
++        case AF_INET6:
++            sin6 = (struct sockaddr_in6 *) c->sockaddr;
++            remote_port = ntohs(sin6->sin6_port);
++            break;
++#endif
++        default:
++            sin = (struct sockaddr_in *) c->sockaddr;
++            remote_port = ntohs(sin->sin_port);
++            break;
++    }
++
++    ngx_log_error(NGX_LOG_INFO, c->log, 0, "*%ui client %V:%ui connected to %V",
++                  c->number, &c->addr_text, remote_port, s->addr_text);
+ 
+     ctx = ngx_palloc(c->pool, sizeof(ngx_mail_log_ctx_t));
+     if (ctx == NULL) {
+@@ -167,6 +181,7 @@
+     }
+ 
+     ctx->client = &c->addr_text;
++    ctx->client_port = remote_port;
+     ctx->session = s;
+ 
+     c->log->connection = c->number;
+@@ -1923,7 +1938,7 @@
+ 
+     ctx = log->data;
+ 
+-    p = ngx_snprintf(buf, len, ", client: %V", ctx->client);
++    p = ngx_snprintf(buf, len, ", client: %V:%ui", ctx->client, ctx->client_port);
+     len -= p - buf;
+     buf = p;
+ 
+@@ -1987,7 +2002,7 @@
+     len -= p - buf;
+     buf = p;
+ 
+-    /* generate "(dw_peer-dw_host) <=> (up_host-up_peer)" */
++    /* generate "(dw_peer->dw_host) <=> (up_host->up_peer)" */
+     p = ngx_snprintf(buf, len, " (");
+     len -= p - buf;
+     buf = p;
+@@ -1998,6 +2013,8 @@
+ 
+     *buf++ = '-';
+     len--;
++    *buf++ = '>';
++    len--;
+ 
+     n = ngx_sock_ntop((struct sockaddr *)dw_host, buf, len, 1);
+     len -= n;
+@@ -2013,6 +2030,8 @@
+ 
+     *buf++ = '-';
+     len--;
++    *buf++ = '>';
++    len--;
+ 
+     n = ngx_sock_ntop((struct sockaddr *)up_peer, buf, len, 1);
+     len -= n;

@@ -8,6 +8,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
+#include <ngx_zm_lookup.h>
 
 
 #if (NGX_HTTP_CACHE)
@@ -452,6 +453,7 @@ ngx_http_upstream_init_request(ngx_http_request_t *r)
 {
     ngx_str_t                      *host;
     ngx_uint_t                      i;
+    ngx_int_t                       rc;
     ngx_resolver_ctx_t             *ctx, temp;
     ngx_http_cleanup_t             *cln;
     ngx_http_upstream_t            *u;
@@ -636,7 +638,11 @@ ngx_http_upstream_init_request(ngx_http_request_t *r)
 
 found:
 
-    if (uscf->peer.init(r, uscf) != NGX_OK) {
+    rc = uscf->peer.init(r, uscf);
+    if (rc != NGX_OK) {
+
+        if (rc == NGX_AGAIN) return; /* added by zimbra to support async peer init */
+
         ngx_http_upstream_finalize_request(r, u,
                                            NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
@@ -1254,8 +1260,9 @@ ngx_http_upstream_ssl_init_connection(ngx_http_request_t *r,
 
     c->sendfile = 0;
     u->output.sendfile = 0;
+    ngx_http_upstream_rr_peer_data_t *rrp = (ngx_http_upstream_rr_peer_data_t *)(u->peer.data);
 
-    if (u->conf->ssl_session_reuse) {
+    if (u->conf->ssl_session_reuse && rrp->current != NGX_INVALID_ARRAY_INDEX) {
         if (u->peer.set_session(&u->peer, u->peer.data) != NGX_OK) {
             ngx_http_upstream_finalize_request(r, u,
                                                NGX_HTTP_INTERNAL_SERVER_ERROR);
@@ -1287,7 +1294,9 @@ ngx_http_upstream_ssl_handshake(ngx_connection_t *c)
 
     if (c->ssl->handshaked) {
 
-        if (u->conf->ssl_session_reuse) {
+        ngx_http_upstream_rr_peer_data_t *rrp = (ngx_http_upstream_rr_peer_data_t *)(u->peer.data);
+
+        if (u->conf->ssl_session_reuse && rrp->current != NGX_INVALID_ARRAY_INDEX) {
             u->peer.save_session(&u->peer, u->peer.data);
         }
 
@@ -2816,6 +2825,7 @@ ngx_http_upstream_next(ngx_http_request_t *r, ngx_http_upstream_t *u,
     ngx_uint_t ft_type)
 {
     ngx_uint_t  status, state;
+    ngx_zm_lookup_conf_t  *zlcf;
 
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "http next upstream, %xi", ft_type);
@@ -2880,7 +2890,13 @@ ngx_http_upstream_next(ngx_http_request_t *r, ngx_http_upstream_t *u,
     if (status) {
         u->state->status = status;
 
-        if (u->peer.tries == 0 || !(u->conf->next_upstream & ft_type)) {
+        zlcf = (ngx_zm_lookup_conf_t *)
+                ngx_get_conf (ngx_cycle->conf_ctx, ngx_zm_lookup_module);
+
+        if (u->peer.tries == 0 || !(u->conf->next_upstream & ft_type) ||
+                (r->method == NGX_HTTP_POST && !((r->uri.len == 1 &&
+                        r->uri.data[r->uri.len - 1] == '/') ||
+                        (ngx_strcasecmp(r->uri.data, zlcf->url.data) == 0)))) {
 
 #if (NGX_HTTP_CACHE)
 
@@ -4175,6 +4191,9 @@ ngx_http_upstream(ngx_conf_t *cf, ngx_command_t *cmd, void *dummy)
                            "no servers are inside upstream");
         return NGX_CONF_ERROR;
     }
+
+    /* add by zimbra to support async upstream peer choose */
+    uscf->connect = ngx_http_upstream_connect;
 
     return rv;
 }

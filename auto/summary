@@ -2,6 +2,7 @@
 # Copyright (C) Igor Sysoev
 # Copyright (C) Nginx, Inc.
 
+# Portions Copyright (c) Zimbra Software, LLC. [1998 – 2011]. All Rights Reserved.
 
 ### STUB
 
@@ -54,6 +55,13 @@ case $MD5 in
     NONE)  echo "  + md5 library is not used" ;;
     NO)    echo "  + using builtin md5 code" ;;
     *)     echo "  + using md5 library: $MD5" ;;
+esac
+
+case $SASL in
+    YES)   echo "  + using system sasl library" ;;
+    NONE)  echo "  + sasl library is not used" ;;
+    NO)    echo "  + sasl library is not found" ;;
+    *)     echo "  + using sasl library: $SASL" ;;
 esac
 
 case $SHA1 in

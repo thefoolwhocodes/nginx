@@ -4,6 +4,10 @@
  * Copyright (C) Nginx, Inc.
  */
 
+/*
+ * Portions Copyright (c) Zimbra Software, LLC. [1998 – 2011]. All Rights Reserved.
+ */
+
 
 #ifndef _NGX_LOG_H_INCLUDED_
 #define _NGX_LOG_H_INCLUDED_
@@ -30,6 +34,7 @@
 #define NGX_LOG_DEBUG_HTTP        0x100
 #define NGX_LOG_DEBUG_MAIL        0x200
 #define NGX_LOG_DEBUG_MYSQL       0x400
+#define NGX_LOG_DEBUG_ZIMBRA      0x800
 
 /*
  * do not forget to update debug_levels[] in src/core/ngx_log.c
@@ -37,7 +42,7 @@
  */
 
 #define NGX_LOG_DEBUG_FIRST       NGX_LOG_DEBUG_CORE
-#define NGX_LOG_DEBUG_LAST        NGX_LOG_DEBUG_MYSQL
+#define NGX_LOG_DEBUG_LAST        NGX_LOG_DEBUG_ZIMBRA
 #define NGX_LOG_DEBUG_CONNECTION  0x80000000
 #define NGX_LOG_DEBUG_ALL         0x7ffffff0
 

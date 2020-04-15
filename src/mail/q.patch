@@ -1,0 +1,38 @@
+--- ngx_mail_handler.c.orig 2013-10-25 23:44:02.000000000 -0500
++++ ngx_mail_handler.c  2013-10-25 23:44:02.000000000 -0500
+@@ -52,6 +52,7 @@
+ {
+     ngx_uint_t             i;
+     ngx_mail_port_t       *port;
++    ngx_uint_t            remote_port;
+     struct sockaddr       *sa;
+     struct sockaddr_in    *sin;
+     ngx_mail_log_ctx_t    *ctx;
+@@ -133,12 +134,16 @@
+         case AF_INET6:
+             addr6 = port->addrs;
+             addr_conf = &addr6[0].conf;
++            sin6 = (struct sockaddr_in6 *) c->local_sockaddr;
++            remote_port = ntohs(sin6->sin6_port);
+             break;
+ #endif
+
+         default: /* AF_INET */
+             addr = port->addrs;
+             addr_conf = &addr[0].conf;
++            sin = (struct sockaddr_in *) c->local_sockaddr;
++            remote_port = ntohs(sin->sin_port);
+             break;
+         }
+     }
+@@ -157,8 +162,8 @@
+     c->data = s;
+     s->connection = c;
+
+-    ngx_log_error(NGX_LOG_INFO, c->log, 0, "*%ui client %V connected to %V",
+-                  c->number, &c->addr_text, s->addr_text);
++    ngx_log_error(NGX_LOG_INFO, c->log, 0, "*%ui client %V:%ui connected to %V",
++                  c->number, &c->addr_text, remote_port, s->addr_text);
+
+     ctx = ngx_palloc(c->pool, sizeof(ngx_mail_log_ctx_t));
+     if (ctx == NULL) {

@@ -4,6 +4,9 @@
  * Copyright (C) Nginx, Inc.
  */
 
+/*
+ * Portions Copyright (c) Zimbra Software, LLC. [1998 – 2011]. All Rights Reserved.
+ */
 
 #include <ngx_config.h>
 #include <ngx_core.h>
@@ -380,6 +383,17 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
                           ngx_open_file_n " \"%s\" failed",
                           file[i].name.data);
             goto failed;
+        }
+
+        //bug 55962, change the owner of log file when current effective
+        //user is root
+        if (geteuid() == 0 && ccf->user != (ngx_uid_t) NGX_CONF_UNSET_UINT) {
+            int rc = fchown(file[i].fd, ccf->user, ccf->group);
+            if(rc != 0) {
+                ngx_log_error(NGX_LOG_WARN, log, ngx_errno,
+                        "Cannot set the owner of log file \"%V\" "
+                        "to user \"%s\"", &file[i].name, &ccf->username);
+            }
         }
 
 #if !(NGX_WIN32)

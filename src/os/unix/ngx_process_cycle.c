@@ -4,6 +4,10 @@
  * Copyright (C) Nginx, Inc.
  */
 
+/*
+ * Portions Copyright (c) Zimbra Software, LLC. [1998-2011]. All Rights Reserved.
+ */
+
 
 #include <ngx_config.h>
 #include <ngx_core.h>
@@ -94,6 +98,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
     ngx_msec_t         delay;
     ngx_listening_t   *ls;
     ngx_core_conf_t   *ccf;
+    struct rlimit     rlmt;
 
     sigemptyset(&set);
     sigaddset(&set, SIGCHLD);
@@ -136,6 +141,66 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
 
     ngx_start_worker_processes(cycle, ccf->worker_processes,
                                NGX_PROCESS_RESPAWN);
+    /* The directives such as "user", "rlimit_core", etc. should also be
+     * effective on master process. Changed by Zimbra
+     */
+    if (ccf->rlimit_nofile != NGX_CONF_UNSET) {
+        rlmt.rlim_cur = (rlim_t) ccf->rlimit_nofile;
+        rlmt.rlim_max = (rlim_t) ccf->rlimit_nofile;
+
+        if (setrlimit(RLIMIT_NOFILE, &rlmt) == -1) {
+            ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
+                          "setrlimit(RLIMIT_NOFILE, %i) failed",
+                          ccf->rlimit_nofile);
+        }
+    }
+
+    if (ccf->rlimit_core != NGX_CONF_UNSET) {
+        rlmt.rlim_cur = (rlim_t) ccf->rlimit_core;
+        rlmt.rlim_max = (rlim_t) ccf->rlimit_core;
+
+        if (setrlimit(RLIMIT_CORE, &rlmt) == -1) {
+            ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
+                          "setrlimit(RLIMIT_CORE, %O) failed",
+                          ccf->rlimit_core);
+        }
+    }
+
+#ifdef RLIMIT_SIGPENDING
+    if (ccf->rlimit_sigpending != NGX_CONF_UNSET) {
+        rlmt.rlim_cur = (rlim_t) ccf->rlimit_sigpending;
+        rlmt.rlim_max = (rlim_t) ccf->rlimit_sigpending;
+
+        if (setrlimit(RLIMIT_SIGPENDING, &rlmt) == -1) {
+            ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
+                          "setrlimit(RLIMIT_SIGPENDING, %i) failed",
+                          ccf->rlimit_sigpending);
+        }
+    }
+#endif
+
+    if (geteuid() == 0) {
+        if (setgid(ccf->group) == -1) {
+            ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
+                          "setgid(%d) failed", ccf->group);
+            /* fatal */
+            exit(2);
+        }
+
+        if (initgroups(ccf->username, ccf->group) == -1) {
+            ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
+                          "initgroups(%s, %d) failed",
+                          ccf->username, ccf->group);
+        }
+
+        if (setuid(ccf->user) == -1) {
+            ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
+                          "setuid(%d) failed", ccf->user);
+            /* fatal */
+            exit(2);
+        }
+    }
+    /* end change by Zimbra */
     ngx_start_cache_manager_processes(cycle, 0);
 
     ngx_new_binary = 0;

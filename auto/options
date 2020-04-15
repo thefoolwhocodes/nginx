@@ -1,7 +1,7 @@
 
 # Copyright (C) Igor Sysoev
 # Copyright (C) Nginx, Inc.
-
+# Portions Copyright (c) Zimbra Software, LLC. [1998 – 2011]. All Rights Reserved.
 
 help=no
 
@@ -97,11 +97,14 @@ HTTP_MP4=NO
 HTTP_GZIP_STATIC=NO
 HTTP_UPSTREAM_IP_HASH=YES
 HTTP_UPSTREAM_KEEPALIVE=YES
+HTTP_UPSTREAM_ZMAUTH=NO
+HTTP_ZM_SSO=NO
 
 # STUB
 HTTP_STUB_STATUS=NO
 
 MAIL=NO
+MAIL_SASL=NO
 MAIL_SSL=NO
 MAIL_POP3=YES
 MAIL_IMAP=YES
@@ -122,6 +125,10 @@ USE_MD5=NO
 MD5=NONE
 MD5_OPT=
 MD5_ASM=NO
+
+USE_SASL=NO
+SASL=NONE
+SASL_OPT=
 
 USE_SHA1=NO
 SHA1=NONE
@@ -213,6 +220,8 @@ do
         --with-http_random_index_module) HTTP_RANDOM_INDEX=YES      ;;
         --with-http_secure_link_module)  HTTP_SECURE_LINK=YES       ;;
         --with-http_degradation_module)  HTTP_DEGRADATION=YES       ;;
+        --with-http_upstream_zmauth_module) HTTP_UPSTREAM_ZMAUTH=YES ;;
+        --with-http_zm_sso_module)       HTTP_ZM_SSO=YES ;;
 
         --without-http_charset_module)   HTTP_CHARSET=NO            ;;
         --without-http_gzip_module)      HTTP_GZIP=NO               ;;
@@ -253,6 +262,7 @@ use the \"--without-http_limit_conn_module\" option instead"
         --with-http_stub_status_module)  HTTP_STUB_STATUS=YES       ;;
 
         --with-mail)                     MAIL=YES                   ;;
+        --with-mail-sasl)                MAIL_SASL=YES              ;;
         --with-mail_ssl_module)          MAIL_SSL=YES               ;;
         # STUB
         --with-imap)                     MAIL=YES                   ;;
@@ -285,6 +295,9 @@ use the \"--without-http_limit_conn_module\" option instead"
         --with-md5=*)                    MD5="$value"               ;;
         --with-md5-opt=*)                MD5_OPT="$value"           ;;
         --with-md5-asm)                  MD5_ASM=YES                ;;
+
+        --with-sasl=*)                   SASL="$value"              ;;
+        --with-sasl-opt=*)               SASL_OPT="$value"          ;;
 
         --with-sha1=*)                   SHA1="$value"              ;;
         --with-sha1-opt=*)               SHA1_OPT="$value"          ;;
@@ -358,6 +371,8 @@ cat << END
   --with-http_secure_link_module     enable ngx_http_secure_link_module
   --with-http_degradation_module     enable ngx_http_degradation_module
   --with-http_stub_status_module     enable ngx_http_stub_status_module
+  --with-http_upstream_zmauth_module enable ngx_http_upstream_zmauth_module
+  --with-http_zm_sso_module          enable ngx_http_zm_sso_module
 
   --without-http_charset_module      disable ngx_http_charset_module
   --without-http_gzip_module         disable ngx_http_gzip_module
@@ -403,6 +418,7 @@ cat << END
   --without-http-cache               disable HTTP cache
 
   --with-mail                        enable POP3/IMAP4/SMTP proxy module
+  --with-mail-sasl                   enable SASL support
   --with-mail_ssl_module             enable ngx_mail_ssl_module
   --without-mail_pop3_module         disable ngx_mail_pop3_module
   --without-mail_imap_module         disable ngx_mail_imap_module
@@ -430,6 +446,9 @@ cat << END
   --with-md5=DIR                     set path to md5 library sources
   --with-md5-opt=OPTIONS             set additional build options for md5
   --with-md5-asm                     use md5 assembler sources
+
+  --with-sasl=DIR                    set path to sasl library sources
+  --with-sasl-opt=OPTIONS            set additional options for sasl building
 
   --with-sha1=DIR                    set path to sha1 library sources
   --with-sha1-opt=OPTIONS            set additional build options for sha1

@@ -1,7 +1,7 @@
 
 # Copyright (C) Igor Sysoev
 # Copyright (C) Nginx, Inc.
-
+# Portions Copyright (c) Zimbra Software, LLC. [1998 – 2011]. All Rights Reserved.
 
 if [ $EVENT_SELECT = NO -a $EVENT_FOUND = NO ]; then
     EVENT_SELECT=YES
@@ -350,6 +350,18 @@ if [ $HTTP_UPSTREAM_KEEPALIVE = YES ]; then
     HTTP_SRCS="$HTTP_SRCS $HTTP_UPSTREAM_KEEPALIVE_SRCS"
 fi
 
+if [ $HTTP_UPSTREAM_ZMAUTH = YES ]; then
+    HTTP_MODULES="$HTTP_MODULES $HTTP_UPSTREAM_ZMAUTH_MODULE"
+    HTTP_SRCS="$HTTP_SRCS $HTTP_UPSTREAM_ZMAUTH_SRCS"
+    HTTP_DEPS="$HTTP_DEPS $HTTP_UPSTREAM_ZMAUTH_DEPS"
+fi
+
+if [ $HTTP_ZM_SSO = YES ]; then
+    HTTP_MODULES="$HTTP_MODULES $HTTP_ZM_SSO_MODULE"
+    HTTP_SRCS="$HTTP_SRCS $HTTP_ZM_SSO_SRCS"
+    HTTP_DEPS="$HTTP_DEPS $HTTP_ZM_SSO_DEPS"
+fi
+
 if [ $HTTP_STUB_STATUS = YES ]; then
     have=NGX_STAT_STUB . auto/have
     HTTP_MODULES="$HTTP_MODULES ngx_http_stub_status_module"
@@ -389,6 +401,8 @@ fi
 
 
 modules="$CORE_MODULES $EVENT_MODULES"
+modules="$modules $MEMCACHE_MODULE"
+modules="$modules $ZM_LOOKUP_MODULE"
 
 
 if [ $USE_OPENSSL = YES ]; then
@@ -418,6 +432,11 @@ fi
 if [ $MAIL = YES ]; then
     modules="$modules $MAIL_MODULES"
 
+    if [ $MAIL_SASL = YES ]; then
+        USE_SASL=YES
+        have=NGX_MAIL_SASL . auto/have
+    fi
+
     if [ $MAIL_SSL = YES ]; then
         modules="$modules $MAIL_SSL_MODULE"
         MAIL_DEPS="$MAIL_DEPS $MAIL_SSL_DEPS"
@@ -444,9 +463,17 @@ if [ $MAIL = YES ]; then
 
     modules="$modules $MAIL_AUTH_HTTP_MODULE"
     MAIL_SRCS="$MAIL_SRCS $MAIL_AUTH_HTTP_SRCS"
+    
+    modules="$modules $MAIL_ZMAUTH_MODULE"
+    MAIL_DEPS="$MAIL_DEPS $MAIL_ZMAUTH_DEPS"
+    MAIL_SRCS="$MAIL_SRCS $MAIL_ZMAUTH_SRCS"
 
     modules="$modules $MAIL_PROXY_MODULE"
     MAIL_SRCS="$MAIL_SRCS $MAIL_PROXY_SRCS"
+
+    modules="$modules $MAIL_THROTTLE_MODULE"
+    MAIL_DEPS="$MAIL_DEPS $MAIL_THROTTLE_DEPS"
+    MAIL_SRCS="$MAIL_SRCS $MAIL_THROTTLE_SRCS"
 fi
 
 

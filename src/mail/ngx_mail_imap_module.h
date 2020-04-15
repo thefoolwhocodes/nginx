@@ -4,6 +4,10 @@
  * Copyright (C) Nginx, Inc.
  */
 
+/*
+ * Portions Copyright (c) Zimbra Software, LLC. [1998-2011]. All Rights Reserved.
+ */
+
 
 #ifndef _NGX_MAIL_IMAP_MODULE_H_INCLUDED_
 #define _NGX_MAIL_IMAP_MODULE_H_INCLUDED_
@@ -24,6 +28,15 @@ typedef struct {
     ngx_uint_t   auth_methods;
 
     ngx_array_t  capabilities;
+
+    ngx_array_t  id_params;
+    ngx_str_t    id;
+
+    ngx_str_t    ua_name;    /* user agent name coming from ID field "NAME" */
+    ngx_str_t    ua_version; /* user agent version coming from ID field "VERSION" */
+
+    ngx_flag_t   literalauth;
+    ngx_str_t    greeting;
 } ngx_mail_imap_srv_conf_t;
 
 
