@@ -10,7 +10,7 @@
 
 
 #define nginx_version      1017009
-#define NGINX_VERSION      "1.17.9"
+#define NGINX_VERSION      "1.17.9-zimbra"
 #define NGINX_VER          "nginx/" NGINX_VERSION
 
 #ifdef NGX_BUILD

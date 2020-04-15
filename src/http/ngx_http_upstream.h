@@ -73,6 +73,9 @@ typedef struct {
 typedef struct {
     ngx_hash_t                       headers_in_hash;
     ngx_array_t                      upstreams;
+
+    // added by zimbra to support async upstream peer init
+    void (* connect)(ngx_http_request_t *r, ngx_http_upstream_t *u);
                                              /* ngx_http_upstream_srv_conf_t */
 } ngx_http_upstream_main_conf_t;
 
@@ -100,6 +103,7 @@ typedef struct {
     ngx_uint_t                       max_fails;
     time_t                           fail_timeout;
     ngx_msec_t                       slow_start;
+    ngx_str_t                        version;
     ngx_uint_t                       down;
 
     unsigned                         backup:1;
@@ -115,6 +119,7 @@ typedef struct {
 #define NGX_HTTP_UPSTREAM_FAIL_TIMEOUT  0x0008
 #define NGX_HTTP_UPSTREAM_DOWN          0x0010
 #define NGX_HTTP_UPSTREAM_BACKUP        0x0020
+#define NGX_HTTP_UPSTREAM_VERSION       0x0040
 #define NGX_HTTP_UPSTREAM_MAX_CONNS     0x0100
 
 
@@ -129,11 +134,15 @@ struct ngx_http_upstream_srv_conf_s {
     u_char                          *file_name;
     ngx_uint_t                       line;
     in_port_t                        port;
+    in_port_t                        default_port;
     ngx_uint_t                       no_port;  /* unsigned no_port:1 */
 
 #if (NGX_HTTP_UPSTREAM_ZONE)
     ngx_shm_zone_t                  *shm_zone;
 #endif
+
+    // added by zimbra to support async upstream peer init
+    void (* connect)(ngx_http_request_t *r, ngx_http_upstream_t *u);
 };
 
 
@@ -432,6 +441,5 @@ ngx_int_t ngx_http_upstream_hide_headers_hash(ngx_conf_t *cf,
 extern ngx_module_t        ngx_http_upstream_module;
 extern ngx_conf_bitmask_t  ngx_http_upstream_cache_method_mask[];
 extern ngx_conf_bitmask_t  ngx_http_upstream_ignore_headers_masks[];
-
 
 #endif /* _NGX_HTTP_UPSTREAM_H_INCLUDED_ */

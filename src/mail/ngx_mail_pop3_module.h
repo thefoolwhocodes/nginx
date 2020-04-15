@@ -4,6 +4,10 @@
  * Copyright (C) Nginx, Inc.
  */
 
+/*
+ * Portions Copyright (c) Zimbra Software, LLC. [1998-2020]. All Rights Reserved.
+ */
+
 
 #ifndef _NGX_MAIL_POP3_MODULE_H_INCLUDED_
 #define _NGX_MAIL_POP3_MODULE_H_INCLUDED_
@@ -15,6 +19,8 @@
 
 
 typedef struct {
+    size_t       client_buffer_size;
+
     ngx_str_t    capability;
     ngx_str_t    starttls_capability;
     ngx_str_t    starttls_only_capability;
@@ -23,6 +29,8 @@ typedef struct {
     ngx_uint_t   auth_methods;
 
     ngx_array_t  capabilities;
+
+    ngx_str_t greeting;
 } ngx_mail_pop3_srv_conf_t;
 
 

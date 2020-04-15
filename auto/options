@@ -1,7 +1,7 @@
 
 # Copyright (C) Igor Sysoev
 # Copyright (C) Nginx, Inc.
-
+# Portions Copyright (c) Zimbra Software, LLC. [1998 – 2011]. All Rights Reserved.
 
 help=no
 
@@ -104,15 +104,20 @@ HTTP_UPSTREAM_LEAST_CONN=YES
 HTTP_UPSTREAM_RANDOM=YES
 HTTP_UPSTREAM_KEEPALIVE=YES
 HTTP_UPSTREAM_ZONE=YES
+HTTP_UPSTREAM_ZMAUTH=NO
+HTTP_ZM_SSO=NO
 
 # STUB
 HTTP_STUB_STATUS=NO
 
 MAIL=NO
+MAIL_SASL=NO
 MAIL_SSL=NO
 MAIL_POP3=YES
 MAIL_IMAP=YES
 MAIL_SMTP=YES
+MAIL_THROTTLE=NO
+MAIL_ZMAUTH=NO
 
 STREAM=NO
 STREAM_SSL=NO
@@ -137,6 +142,10 @@ NGX_ADDON_DEPS=
 DYNAMIC_ADDONS=
 
 NGX_COMPAT=NO
+
+USE_SASL=NO
+SASL=NONE
+SASL_OPT=
 
 USE_PCRE=NO
 PCRE=NONE
@@ -245,7 +254,10 @@ $0: warning: the \"--with-ipv6\" option is deprecated"
         --with-http_secure_link_module)  HTTP_SECURE_LINK=YES       ;;
         --with-http_degradation_module)  HTTP_DEGRADATION=YES       ;;
         --with-http_slice_module)        HTTP_SLICE=YES             ;;
-
+        --with-http_upstream_zmauth_module) HTTP_UPSTREAM_ZMAUTH=YES ;;
+        --with-http_zm_sso_module)       HTTP_ZM_SSO=YES            ;;
+        --with-mail_throttle)            MAIL_THROTTLE=YES          ;;
+        --with-mail_zmauth)              MAIL_ZMAUTH=YES            ;;
         --without-http_charset_module)   HTTP_CHARSET=NO            ;;
         --without-http_gzip_module)      HTTP_GZIP=NO               ;;
         --without-http_ssi_module)       HTTP_SSI=NO                ;;
@@ -288,6 +300,7 @@ $0: warning: the \"--with-ipv6\" option is deprecated"
         --with-http_stub_status_module)  HTTP_STUB_STATUS=YES       ;;
 
         --with-mail)                     MAIL=YES                   ;;
+        --with-mail-sasl)                MAIL_SASL=YES              ;;
         --with-mail=dynamic)             MAIL=DYNAMIC               ;;
         --with-mail_ssl_module)          MAIL_SSL=YES               ;;
         # STUB
@@ -369,7 +382,12 @@ $0: warning: the \"--with-md5-opt\" option is deprecated"
             NGX_POST_CONF_MSG="$NGX_POST_CONF_MSG
 $0: warning: the \"--with-md5-asm\" option is deprecated"
         ;;
-
+        --with-sasl=*)
+            SASL="$value"
+        ;;
+        --with-sasl-opt=*)
+            SASL_OPT="$value"
+        ;;
         --with-sha1=*)
             NGX_POST_CONF_MSG="$NGX_POST_CONF_MSG
 $0: warning: the \"--with-sha1\" option is deprecated"
@@ -460,6 +478,8 @@ cat << END
   --with-http_degradation_module     enable ngx_http_degradation_module
   --with-http_slice_module           enable ngx_http_slice_module
   --with-http_stub_status_module     enable ngx_http_stub_status_module
+  --with-http_upstream_zmauth_module enable ngx_http_upstream_zmauth_module
+  --with-http_zm_sso_module          enable ngx_http_zm_sso_module
 
   --without-http_charset_module      disable ngx_http_charset_module
   --without-http_gzip_module         disable ngx_http_gzip_module
@@ -518,6 +538,7 @@ cat << END
   --without-http-cache               disable HTTP cache
 
   --with-mail                        enable POP3/IMAP4/SMTP proxy module
+  --with-mail-sasl                   enable SASL support
   --with-mail=dynamic                enable dynamic POP3/IMAP4/SMTP proxy module
   --with-mail_ssl_module             enable ngx_mail_ssl_module
   --without-mail_pop3_module         disable ngx_mail_pop3_module
@@ -580,6 +601,9 @@ cat << END
 
   --with-openssl=DIR                 set path to OpenSSL library sources
   --with-openssl-opt=OPTIONS         set additional build options for OpenSSL
+
+  --with-sasl=DIR                    set path to sasl library sources
+  --with-sasl-opt=OPTIONS            set additional options for sasl building
 
   --with-debug                       enable debug logging
 

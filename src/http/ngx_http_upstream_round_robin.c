@@ -15,7 +15,7 @@
 
 
 static ngx_http_upstream_rr_peer_t *ngx_http_upstream_get_peer(
-    ngx_http_upstream_rr_peer_data_t *rrp);
+                                                               ngx_http_upstream_rr_peer_data_t *rrp, ngx_log_t* log);
 
 #if (NGX_HTTP_SSL)
 
@@ -97,6 +97,7 @@ ngx_http_upstream_init_round_robin(ngx_conf_t *cf,
                 peer[n].fail_timeout = server[i].fail_timeout;
                 peer[n].down = server[i].down;
                 peer[n].server = server[i].name;
+                peer[n].version = server[i].version;
 
                 *peerp = &peer[n];
                 peerp = &peer[n].next;
@@ -141,6 +142,7 @@ ngx_http_upstream_init_round_robin(ngx_conf_t *cf,
         backup->total_weight = w;
         backup->name = &us->host;
 
+
         n = 0;
         peerp = &backup->peer;
 
@@ -161,7 +163,7 @@ ngx_http_upstream_init_round_robin(ngx_conf_t *cf,
                 peer[n].fail_timeout = server[i].fail_timeout;
                 peer[n].down = server[i].down;
                 peer[n].server = server[i].name;
-
+                peer[n].version = server[i].version;
                 *peerp = &peer[n];
                 peerp = &peer[n].next;
                 n++;
@@ -228,6 +230,8 @@ ngx_http_upstream_init_round_robin(ngx_conf_t *cf,
         peer[i].max_conns = 0;
         peer[i].max_fails = 1;
         peer[i].fail_timeout = 10;
+        peer[i].version.len = 0;
+        peer[i].version.data = NULL;
         *peerp = &peer[i];
         peerp = &peer[i].next;
     }
@@ -246,6 +250,7 @@ ngx_http_upstream_init_round_robin_peer(ngx_http_request_t *r,
 {
     ngx_uint_t                         n;
     ngx_http_upstream_rr_peer_data_t  *rrp;
+    ngx_http_core_loc_conf_t          *clcf;
 
     rrp = r->upstream->peer.data;
 
@@ -261,6 +266,12 @@ ngx_http_upstream_init_round_robin_peer(ngx_http_request_t *r,
     rrp->peers = us->peer.data;
     rrp->current = NULL;
     rrp->config = 0;
+    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+    if (clcf) {
+        rrp->exact_version_check = clcf->exact_version_check;
+    }
+    rrp->version.data = (u_char*) "";
+    rrp->version.len = 0;
 
     n = rrp->peers->number;
 
@@ -344,6 +355,8 @@ ngx_http_upstream_create_round_robin_peer(ngx_http_request_t *r,
         peer[0].max_conns = 0;
         peer[0].max_fails = 1;
         peer[0].fail_timeout = 10;
+        peer[0].version.len = 0;
+        peer[0].version.data = NULL;
         peers->peer = peer;
 
     } else {
@@ -378,6 +391,8 @@ ngx_http_upstream_create_round_robin_peer(ngx_http_request_t *r,
             peer[i].max_conns = 0;
             peer[i].max_fails = 1;
             peer[i].fail_timeout = 10;
+            peer[i].version.len = 0;
+            peer[i].version.data = NULL;
             *peerp = &peer[i];
             peerp = &peer[i].next;
         }
@@ -405,7 +420,7 @@ ngx_http_upstream_create_round_robin_peer(ngx_http_request_t *r,
     r->upstream->peer.free = ngx_http_upstream_free_round_robin_peer;
     r->upstream->peer.tries = ngx_http_upstream_tries(rrp->peers);
 #if (NGX_HTTP_SSL)
-    r->upstream->peer.set_session = ngx_http_upstream_empty_set_session;
+   r->upstream->peer.set_session = ngx_http_upstream_empty_set_session;
     r->upstream->peer.save_session = ngx_http_upstream_empty_save_session;
 #endif
 
@@ -449,15 +464,15 @@ ngx_http_upstream_get_round_robin_peer(ngx_peer_connection_t *pc, void *data)
 
         /* there are several peers */
 
-        peer = ngx_http_upstream_get_peer(rrp);
+        peer = ngx_http_upstream_get_peer(rrp, pc->log);
 
         if (peer == NULL) {
             goto failed;
         }
 
-        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, pc->log, 0,
-                       "get rr peer, current: %p %i",
-                       peer, peer->current_weight);
+        ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0,
+                       "get rr peer, current: %ui %i version:%s",
+                       rrp->current, peer->current_weight, peer->version);
     }
 
     pc->sockaddr = peer->sockaddr;
@@ -505,7 +520,7 @@ failed:
 
 
 static ngx_http_upstream_rr_peer_t *
-ngx_http_upstream_get_peer(ngx_http_upstream_rr_peer_data_t *rrp)
+ngx_http_upstream_get_peer(ngx_http_upstream_rr_peer_data_t *rrp, ngx_log_t* log)
 {
     time_t                        now;
     uintptr_t                     m;
@@ -546,6 +561,10 @@ ngx_http_upstream_get_peer(ngx_http_upstream_rr_peer_data_t *rrp)
 
         if (peer->max_conns && peer->conns >= peer->max_conns) {
             continue;
+        }
+
+        if (ngx_http_upstream_rr_peer_version_allowed(peer, rrp, log) == 0) {
+        	continue;
         }
 
         peer->current_weight += peer->effective_weight;
@@ -655,6 +674,69 @@ ngx_http_upstream_free_round_robin_peer(ngx_peer_connection_t *pc, void *data,
     }
 }
 
+/* check if this upstream peer is allowed (same exact version/same major-minor version based on exact_version_check flag)
+ * return 1 if allowed, 0 if not */
+ngx_flag_t
+ngx_http_upstream_rr_peer_version_allowed(ngx_http_upstream_rr_peer_t *peer, void* data,
+                                       ngx_log_t* log) {
+    ngx_http_upstream_rr_peer_data_t* rrp = data;
+    ngx_uint_t peer_version[2], auth_token_version[2];
+    ngx_flag_t f = 1;
+    ngx_uint_t j = 0;
+    char *ptr = NULL;
+
+    /* Version check enforcement when the auth_token contains a version */
+    if (rrp->version.len && peer->version.len == 0) {
+        // Peer does not have version set in nginx conf
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, log, 0,
+                        "auth_token has a version but the peer doesn't, skipping peer");
+        return 0;
+    } else if (rrp->version.len && peer->version.len) {
+        // Peer has version set in nginx conf
+        if (rrp->exact_version_check) {
+            // if the server version check is non-permissive (needs to be an exact match)
+            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, log, 0,
+                    "exact_version_check is on");
+            if (rrp->version.len != peer->version.len || ngx_memcmp(rrp->version.data, peer->version.data, rrp->version.len)) {
+                ngx_log_debug1(NGX_LOG_DEBUG_HTTP, log, 0,
+                        "skipping peer at a different version %V", &peer->version);
+                f = 0;
+            }
+        } else {
+            // if the server version check is permissive (eg. all 8.5.x will be treated same by nginx)
+            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, log, 0,
+                    "exact_version_check is off");
+
+            ptr = strtok ((char *)rrp->version.data,".");
+            while (ptr != NULL && (j < 2)) {
+                auth_token_version[j] = atoi(ptr);
+                ngx_log_debug2(NGX_LOG_DEBUG_HTTP, log, 0,
+                        "auth_token_version[%d] = %d", j, auth_token_version[j]);
+                ptr = strtok (NULL, ".");
+                j++;
+            }
+            j = 0;
+            ptr = strtok ((char *)peer->version.data,".");
+            while (ptr != NULL && (j < 2)) {
+                peer_version[j] = atoi(ptr);
+                ngx_log_debug2(NGX_LOG_DEBUG_HTTP, log, 0,
+                        "peer_version[%d] = %d", j, peer_version[j]);
+                ptr = strtok (NULL, ".");
+                j++;
+            }
+            // Compare if the major and minor revisions are same
+            for (j = 0; j < 2; j++) {
+                if (auth_token_version[j] != peer_version[j]) {
+                    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, log, 0,
+                            "skipping peer at a different major/minor version %V", &peer->version);
+                    f = 0;
+                }
+            }
+        }
+    }
+
+    return f;
+}
 
 #if (NGX_HTTP_SSL)
 

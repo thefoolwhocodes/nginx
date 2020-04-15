@@ -1446,6 +1446,7 @@ ngx_mail_auth_http_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_uint_t        i;
     ngx_table_elt_t  *header;
 
+    /* we have zmauth
     if (conf->peer == NULL) {
         conf->peer = prev->peer;
         conf->host_header = prev->host_header;
@@ -1458,7 +1459,7 @@ ngx_mail_auth_http_merge_conf(ngx_conf_t *cf, void *parent, void *child)
 
             return NGX_CONF_ERROR;
         }
-    }
+    }*/
 
     ngx_conf_merge_msec_value(conf->timeout, prev->timeout, 60000);
 

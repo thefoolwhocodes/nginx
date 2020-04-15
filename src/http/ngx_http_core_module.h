@@ -4,6 +4,9 @@
  * Copyright (C) Nginx, Inc.
  */
 
+/*
+ * Portions Copyright (c) Zimbra Software, LLC. [1998 – 2020]. All Rights Reserved.
+ */
 
 #ifndef _NGX_HTTP_CORE_H_INCLUDED_
 #define _NGX_HTTP_CORE_H_INCLUDED_
@@ -396,6 +399,7 @@ struct ngx_http_core_loc_conf_s {
     ngx_uint_t    server_tokens;           /* server_tokens */
     ngx_flag_t    chunked_transfer_encoding; /* chunked_transfer_encoding */
     ngx_flag_t    etag;                    /* etag */
+    ngx_flag_t    exact_version_check;     /* exact_version_check added by zimbra */
 
 #if (NGX_HTTP_GZIP)
     ngx_flag_t    gzip_vary;               /* gzip_vary */

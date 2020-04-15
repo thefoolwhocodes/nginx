@@ -1,7 +1,7 @@
 
 # Copyright (C) Igor Sysoev
 # Copyright (C) Nginx, Inc.
-
+# Portions Copyright (c) Zimbra Software, LLC. [1998 – 2011]. All Rights Reserved.
 
 CORE_MODULES="ngx_core_module ngx_errlog_module ngx_conf_module"
 
@@ -39,6 +39,8 @@ CORE_DEPS="src/core/nginx.h \
            src/core/ngx_module.h \
            src/core/ngx_resolver.h \
            src/core/ngx_open_file_cache.h \
+           src/core/ngx_memcache.h \
+           src/core/ngx_zm_lookup.h \
            src/core/ngx_crypt.h \
            src/core/ngx_proxy_protocol.h \
            src/core/ngx_syslog.h"
@@ -76,6 +78,8 @@ CORE_SRCS="src/core/nginx.c \
            src/core/ngx_module.c \
            src/core/ngx_resolver.c \
            src/core/ngx_open_file_cache.c \
+           src/core/ngx_memcache.c \
+           src/core/ngx_zm_lookup.c \
            src/core/ngx_crypt.c \
            src/core/ngx_proxy_protocol.c \
            src/core/ngx_syslog.c"
@@ -125,6 +129,9 @@ IOCP_SRCS=src/event/modules/ngx_iocp_module.c
 
 FILE_AIO_SRCS="src/os/unix/ngx_file_aio_read.c"
 LINUX_AIO_SRCS="src/os/unix/ngx_linux_aio_read.c"
+
+MEMCACHE_MODULE=ngx_memcache_module
+ZM_LOOKUP_MODULE=ngx_zm_lookup_module
 
 UNIX_INCS="$CORE_INCS $EVENT_INCS src/os/unix"
 
@@ -252,6 +259,5 @@ WIN32_SRCS="$CORE_SRCS $EVENT_SRCS \
 
 NGX_WIN32_ICONS="src/os/win32/nginx.ico"
 NGX_WIN32_RC="src/os/win32/nginx.rc"
-
 
 HTTP_FILE_CACHE_SRCS=src/http/ngx_http_file_cache.c

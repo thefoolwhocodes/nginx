@@ -40,6 +40,8 @@ struct ngx_http_upstream_rr_peer_s {
 
     ngx_uint_t                      down;
 
+    ngx_str_t                       version;       /* upstream server version */
+
 #if (NGX_HTTP_SSL || NGX_COMPAT)
     void                           *ssl_session;
     int                             ssl_session_len;
@@ -130,6 +132,8 @@ typedef struct {
     ngx_http_upstream_rr_peer_t    *current;
     uintptr_t                      *tried;
     uintptr_t                       data;
+    ngx_str_t                       version;
+    ngx_flag_t                      exact_version_check;
 } ngx_http_upstream_rr_peer_data_t;
 
 
@@ -143,6 +147,8 @@ ngx_int_t ngx_http_upstream_get_round_robin_peer(ngx_peer_connection_t *pc,
     void *data);
 void ngx_http_upstream_free_round_robin_peer(ngx_peer_connection_t *pc,
     void *data, ngx_uint_t state);
+ngx_flag_t ngx_http_upstream_rr_peer_version_allowed(ngx_http_upstream_rr_peer_t *peer,
+	void* data, ngx_log_t* log);
 
 #if (NGX_HTTP_SSL)
 ngx_int_t
