@@ -4,6 +4,10 @@
  * Copyright (C) Nginx, Inc.
  */
 
+/*
+ * Portions Copyright (c) Zimbra Software, LLC. [1998 – 2020]. All Rights Reserved.
+ */
+
 
 #include <ngx_config.h>
 #include <ngx_core.h>
@@ -86,7 +90,7 @@ static ngx_str_t err_levels[] = {
 
 static const char *debug_levels[] = {
     "debug_core", "debug_alloc", "debug_mutex", "debug_event",
-    "debug_http", "debug_mail", "debug_stream"
+    "debug_http", "debug_mail", "debug_stream", "debug_zimbra"
 };
 
 

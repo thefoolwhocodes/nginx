@@ -73,6 +73,9 @@ typedef struct {
 typedef struct {
     ngx_hash_t                       headers_in_hash;
     ngx_array_t                      upstreams;
+
+    // added by zimbra to support async upstream peer init
+    void (* connect)(ngx_http_request_t *r, ngx_http_upstream_t *u);
                                              /* ngx_http_upstream_srv_conf_t */
 } ngx_http_upstream_main_conf_t;
 
@@ -134,6 +137,9 @@ struct ngx_http_upstream_srv_conf_s {
 #if (NGX_HTTP_UPSTREAM_ZONE)
     ngx_shm_zone_t                  *shm_zone;
 #endif
+
+    // added by zimbra to support async upstream peer init
+    void (* connect)(ngx_http_request_t *r, ngx_http_upstream_t *u);
 };
 
 
@@ -432,6 +438,5 @@ ngx_int_t ngx_http_upstream_hide_headers_hash(ngx_conf_t *cf,
 extern ngx_module_t        ngx_http_upstream_module;
 extern ngx_conf_bitmask_t  ngx_http_upstream_cache_method_mask[];
 extern ngx_conf_bitmask_t  ngx_http_upstream_ignore_headers_masks[];
-
 
 #endif /* _NGX_HTTP_UPSTREAM_H_INCLUDED_ */

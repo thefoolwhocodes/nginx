@@ -538,6 +538,7 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
                 return NGX_HTTP_PARSE_INVALID_REQUEST;
             default:
                 state = sw_check_uri;
+		p--;
                 break;
             }
             break;
@@ -590,6 +591,7 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
             case '?':
                 r->args_start = p + 1;
                 state = sw_uri;
+		p--;
                 break;
             case '#':
                 r->complex_uri = 1;

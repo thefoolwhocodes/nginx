@@ -405,7 +405,7 @@ ngx_http_upstream_create_round_robin_peer(ngx_http_request_t *r,
     r->upstream->peer.free = ngx_http_upstream_free_round_robin_peer;
     r->upstream->peer.tries = ngx_http_upstream_tries(rrp->peers);
 #if (NGX_HTTP_SSL)
-    r->upstream->peer.set_session = ngx_http_upstream_empty_set_session;
+   r->upstream->peer.set_session = ngx_http_upstream_empty_set_session;
     r->upstream->peer.save_session = ngx_http_upstream_empty_save_session;
 #endif
 
