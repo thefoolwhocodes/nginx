@@ -17,7 +17,6 @@ static ngx_int_t ngx_parse_inet_url(ngx_pool_t *pool, ngx_url_t *u);
 static ngx_int_t ngx_parse_inet6_url(ngx_pool_t *pool, ngx_url_t *u);
 static ngx_int_t ngx_inet_add_addr(ngx_pool_t *pool, ngx_url_t *u,
     struct sockaddr *sockaddr, socklen_t socklen, ngx_uint_t total);
-static ngx_int_t ngx_resolve_hostname(ngx_pool_t *pool, ngx_url_t *u);
 
 
 in_addr_t
@@ -970,8 +969,6 @@ no_port:
         }
 
         return ngx_inet_add_addr(pool, u, &u->sockaddr.sockaddr, u->socklen, 1);
-    } else {
-        return ngx_resolve_hostname(pool, u);
     }
 
     if (u->no_resolve) {
@@ -989,114 +986,6 @@ no_port:
 
     return NGX_OK;
 }
-
-static ngx_int_t
-ngx_resolve_hostname(ngx_pool_t *pool, ngx_url_t *u) {
-    u_char               *p;
-    ngx_uint_t            family;
-    in_addr_t             in_addr;
-    struct sockaddr_in   *sin;
-
-#if (NGX_HAVE_INET6)
-    struct addrinfo       hints, *addrinfo;
-    struct in6_addr       in6_addr;
-    struct sockaddr_in6  *sin6;
-    int                   n;
-#else
-    struct hostent       *h;
-#endif
-
-    in_addr = 0;
-
-    /* resolve the IP address through host name.
-     * only the first IP address will be used.   */
-    p = ngx_alloc(u->host.len + 1, pool->log);
-
-    if (p == NULL) {
-      return NGX_ERROR;
-    }
-
-    ngx_cpystrn(p, u->host.data, u->host.len + 1);
-
-#if (NGX_HAVE_INET6)
-
-    ngx_memzero (&hints, sizeof (struct addrinfo));
-
-    if (u->listen) {
-       hints.ai_flags = AI_PASSIVE;
-    } else {
-       hints.ai_flags = AI_CANONNAME;
-    }
-
-    hints.ai_protocol = IPPROTO_TCP;
-
-    n = getaddrinfo((const char *) p,
-           NULL, &hints, &addrinfo);
-
-    if (n != NGX_OK) {
-       u->err = "host not found";
-       return NGX_ERROR;
-    }
-
-    if (addrinfo->ai_family == AF_INET) {
-       family = AF_INET;
-       in_addr = ((struct sockaddr_in *) addrinfo->ai_addr)->sin_addr.s_addr;
-
-    } else { /* AF_INET6 */
-       family = AF_INET6;
-       in6_addr = ((struct sockaddr_in6 *) addrinfo->ai_addr)->sin6_addr;
-
-    }
-#else
-    h = gethostbyname((const char *) p);
-
-    if (h == NULL || h->h_addr_list[0] == NULL) {
-        u->err = "host not found";
-        return NGX_ERROR;
-    }
-
-    in_addr = *(in_addr_t *) (h->h_addr_list[0]);
-#endif
-
-    ngx_free(p);
-
-    switch (family) {
-
-#if (NGX_HAVE_INET6)
-    case AF_INET6:
-       sin6 = (struct sockaddr_in6 *) &u->sockaddr;
-       sin6->sin6_family = AF_INET6;
-       sin6->sin6_port = htons(u->port);
-       u->family = AF_INET6;
-       u->socklen = sizeof (struct sockaddr_in6);
-       ngx_memcpy(sin6->sin6_addr.s6_addr, in6_addr.s6_addr, 16);
-
-       if (IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr)) {
-           u->wildcard = 1;
-       }
-       break;
-#endif
-
-    default: /* AF_INET */
-       sin = (struct sockaddr_in *) &u->sockaddr;
-       sin->sin_family = AF_INET;
-       sin->sin_port = htons(u->port);
-       u->family = AF_INET;
-       u->socklen = sizeof (struct sockaddr_in);
-       sin->sin_addr.s_addr = in_addr;
-       if (sin->sin_addr.s_addr == INADDR_ANY) {
-           u->wildcard = 1;
-       }
-       break;
-    }
-
-    if (u->listen) {
-        return NGX_OK;
-    }
-
-    return ngx_inet_resolve_host(pool, u);
-}
-
 
 static ngx_int_t
 ngx_parse_inet6_url(ngx_pool_t *pool, ngx_url_t *u)
